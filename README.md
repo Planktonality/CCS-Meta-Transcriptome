@@ -1,4 +1,4 @@
-[trim_galore.txt](https://github.com/user-attachments/files/16551556/trim_galore.txt)# CCS-Metatranscriptome
+# CCS-Metatranscriptome
 
 #### Metatranscriptome bioinformatic pipeline for eukaryotic phytoplankton from the California Current System.
 
