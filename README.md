@@ -22,7 +22,9 @@ Below is a detailed breakdown of the workflow used to evaluate the metatranscrip
 
 The first step of the workflow will be to get rid of bad reads and adapter sequences by trimming. There is an abundance of adapter trimming tools out there, but for the purpose of our study, we will use Trim Galore.
 
-`` #!/bin/bash
+
+```
+#!/bin/bash
 
 indir=/proj/marchlab/projects/PUPCYCLE_2019/PUP_SimUp/raw/00_fastq
 outdir=/proj/marchlab/projects/PUPCYCLE_2019/PUP_SimUp/galore_test
@@ -59,6 +61,6 @@ EOF
 sbatch $jobfile
 
 done 
-``
+```
 
 
