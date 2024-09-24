@@ -148,7 +148,7 @@ date
 
 Steps 4 and Step 5 (Alignment) can be run at the same time, with annotation, we will need to annotate your assemblycdhit.fasta file to both a functional (KEGG) and taxonomic (phyloDB) database using the DIAMOND command.
 
-# Functional
+#### Functional
 
 ```
 #!/bin/bash
@@ -178,7 +178,7 @@ diamond blastx -d keggdb \
 -p 12 -e 0.001 -k 10
 ```
 
-# Taxonomic
+#### Taxonomic
 
 ```
 #!/bin/bash
