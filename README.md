@@ -117,7 +117,7 @@ sbatch $jobfile
 
 done
 ```
-This job will produce a transcripts.fasta file for each of your samples in a separate directory created by the outdir command. The next step is to assemble all of these .fasta files into a grand assembly which will act as a transcriptome for your next steps. To do so, you will have to concatenate each transcripts.fasta file using the `cat` command on the cluster, and name your file accordingly. In this example, we'll name our file assembly.fasta, for future scripts that will use this mega assembly.
+This job will produce a transcripts.fasta file for each of your samples in a separate directory created by the outdir command. The next step is to assemble all of these .fasta files into a grand assembly which will act as a transcriptome for your next steps. To do so, you will have to concatenate each transcripts.fasta file using the `./cat` command on the cluster, and name your file accordingly. In this example, we'll name our file assembly.fasta, for future scripts that will use this mega assembly.
 
 ### 3. CD-HIT-EST
 
@@ -137,6 +137,8 @@ After you have generated the grand assembly, you will perform CD-HIT-EST to clus
 #SBATCH -J cdhit
 #SBATCH -o cdhit.%A.out
 #SBATCH -e cdhit.%A.err
+
+cd /proj/lab/project/assembly
 
 hostname
 date
@@ -167,13 +169,13 @@ Steps 4 and Step 5 (Alignment) can be run at the same time, with annotation, we 
 
 module load diamond
 
-indir=[directory containing your clustered and de-duplicated grand assembly, i.e. /proj/lab/project/]
+indir=[directory containing your clustered and de-duplicated grand assembly, i.e. /proj/lab/project/assembly]
 outdir=[directory containing your output from DIAMOND blast, i.e. /proj/lab/project/annotation]
 
 diamond makedb --in /nas/longleaf/data/KEGG/KEGG/genes/fasta/genes.pep.fasta -d keggdb
 
 diamond blastx -d keggdb \
--q /proj/lab/project/assemblycdhit.fasta
+-q /proj/lab/project/assembly_cdhit.fasta
 -o /proj/lab/project/annotation/KEGG.m8 \
 -p 12 -e 0.001 -k 10
 ```
@@ -201,9 +203,93 @@ outdir=/proj/lab/project/annotation/
 diamond makedb --in /proj/marchlab/data/phylodb/phylodb_1.076.pep.fa -d phylodb
 
 diamond blastx -d /proj/marchlab/data/phylodb/diamond_db/phylodb \
--q /proj/lab/project/assemblycdhit.fasta \
+-q /proj/lab/project/assembly_cdhit.fasta \
 -o /proj/lab/project/annotation/phyloDB.m8 \
 -p 12 -e 0.000001 -k 1
 ```
 
 ### 5. Alignment
+
+Now that we have our pair-end sequences, the grand assembly, and the annotations for the assembly, the final step is to quantify the sequence counts and abundances so we can examine the transcript expression. We will be using the tool SALMON to perform this task. However, we will first need to convert our grand assembly into a salmon index from which we will align our sequences. The following is the script to do this:
+
+```
+#!/bin/bash
+
+#SBATCH -p bigmem
+#SBATCH -q bigmem_access
+#SBATCH -N 1
+#SBATCH -t 01-00:00:00
+#SBATCH --mem=500g
+#SBATCH --cpus-per-task=36
+#SBATCH --constraint="[rhel7|rhel8]"
+#SBATCH --mail-type=BEGIN,END,FAIL
+#SBATCH --mail-user=johnsony@live.unc.edu
+#SBATCH -J salmonindex
+#SBATCH -o salmonindex.%A.out
+#SBATCH -e salmonindex.%A.err
+ 
+module add salmon
+
+echo 'BEGIN'
+date
+hostname
+
+cd /proj/lab/project/assembly
+outdir=/proj/lab/project/alignment
+
+salmon index -t /proj/lab/project/assembly/assembly_cdhit.fasta -i salmon_index
+
+echo 'END'
+date
+```
+
+After the previous step, you will then perform the alignment using SALMON. Again, we will be using a for loop to align all of the samples to your salmon_index at once. The job will produce a corresponding file for your alignment output for each sample, containing quant.sf files that you will import into DESeq2 later on.
+
+```
+#!/bin/bash
+
+indir=[directory containing your trimmed reads, i.e. /proj/lab/project/trimmed_reads]
+outdir=[directory containing your SALMON alignment output, i.e. /proj/lab/project/alignment]
+mkdir -p Psn
+
+samples='S1 S2 S3'
+
+for s in $samples; do
+    echo ${s}
+    R1=`ls -l $indir | grep -o ${s}_R1.fq.gz`
+    R2=`ls -l $indir | grep -o ${s}_R2.fq.gz`
+    echo ${R1}
+    echo ${R2}
+    jobfile="psnquant${s}.sh"
+    echo $jobfile
+    cat <<EOF > $jobfile
+#!/bin/bash
+#SBATCH -N 1
+#SBATCH -t 05-00:00:00
+#SBATCH --mem=250g
+#SBATCH -n 16
+#SBATCH -o salmonalign.%A.out
+#SBATCH -e salmonalign.%A.err
+
+
+module add salmon
+echo 'BEGIN'
+date
+hostname
+salmon quant -i /proj/lab/project/alignment/salmon_index -l A \\
+        -1 $indir/${R1} \\
+        -2 $indir/${R2} \\
+        -p 5 --validateMappings \\
+        -o quants/${s}_quant
+echo 'END'
+date
+
+EOF
+
+    sbatch $jobfile
+
+done
+```
+
+
+
