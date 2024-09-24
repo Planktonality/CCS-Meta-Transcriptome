@@ -117,6 +117,93 @@ sbatch $jobfile
 
 done
 ```
-This job will produce a transcripts.fasta file for each of your samples in a separate directory created by the outdir command. The next step is to assemble all of these .fasta files into a grand assembly which will act as a transcriptome for your next steps.
+This job will produce a transcripts.fasta file for each of your samples in a separate directory created by the outdir command. The next step is to assemble all of these .fasta files into a grand assembly which will act as a transcriptome for your next steps. To do so, you will have to concatenate each transcripts.fasta file using the `cat` command on the cluster, and name your file accordingly. In this example, we'll name our file assembly.fasta, for future scripts that will use this mega assembly.
 
+### 3. CD-HIT-EST
 
+After you have generated the grand assembly, you will perform CD-HIT-EST to cluster and reduce the redundancy of your sequences. It is an important tool used in handling large datasets and can improve the performance of other sequencing analyses. Information on this program can be found here: https://sites.google.com/view/cd-hit
+
+```
+#!/bin/bash
+
+#SBATCH -p snp
+#SBATCH -q snp_access
+#SBATCH --nodes=1
+#SBATCH --time=5-00:00:00
+#SBATCH --mem=700g
+#SBATCH --ntasks=255
+#SBATCH --mail-type=BEGIN,END,FAIL
+#SBATCH --mail-user=johnsony@live.unc.edu
+#SBATCH -J cdhit
+#SBATCH -o cdhit.%A.out
+#SBATCH -e cdhit.%A.err
+
+hostname
+date
+cd-hit-est -i assembly.fasta -o assembly_cdhit.fasta -T 12 -c 1 -n 11 -d 0 -M 700000 -T 255 -G o -aS 1 -aL 1
+date
+```
+
+### 4. Annotation
+
+Steps 4 and Step 5 (Alignment) can be run at the same time, with annotation, we will need to annotate your assemblycdhit.fasta file to both a functional (KEGG) and taxonomic (phyloDB) database using the DIAMOND command.
+
+# Functional
+
+```
+#!/bin/bash
+
+#SBATCH -p snp
+#SBATCH -q snp_access
+#SBATCH --nodes=1
+#SBATCH --time=5-00:00:00
+#SBATCH --mem=700g
+#SBATCH --ntasks=255
+#SBATCH --mail-type=BEGIN,END,FAIL
+#SBATCH --mail-user=johnsony@live.unc.edu
+#SBATCH -J kegg
+#SBATCH -o kegg.%A.out
+#SBATCH -e kegg.%A.err
+
+module load diamond
+
+indir=[directory containing your clustered and de-duplicated grand assembly, i.e. /proj/lab/project/]
+outdir=[directory containing your output from DIAMOND blast, i.e. /proj/lab/project/annotation]
+
+diamond makedb --in /nas/longleaf/data/KEGG/KEGG/genes/fasta/genes.pep.fasta -d keggdb
+
+diamond blastx -d keggdb \
+-q /proj/lab/project/assemblycdhit.fasta
+-o /proj/lab/project/annotation/KEGG.m8 \
+-p 12 -e 0.001 -k 10
+```
+
+# Taxonomic
+
+```
+#!/bin/bash
+
+#SBATCH -p general
+#SBATCH --nodes=1
+#SBATCH --time=0-24:00:00
+#SBATCH --mem=500G
+#SBATCH --ntasks=12
+#SBATCH --mail-type=BEGIN,END,FAIL
+#SBATCH --mail-user=johnsony@live.unc.edu
+#SBATCH -J UTphylo
+#SBATCH -o UTphylo.%A.out
+#SBATCH -e UTphylo.%A.err
+
+module load diamond
+
+cd /proj/lab/project/annotation
+outdir=/proj/lab/project/annotation/
+diamond makedb --in /proj/marchlab/data/phylodb/phylodb_1.076.pep.fa -d phylodb
+
+diamond blastx -d /proj/marchlab/data/phylodb/diamond_db/phylodb \
+-q /proj/lab/project/assemblycdhit.fasta \
+-o /proj/lab/project/annotation/phyloDB.m8 \
+-p 12 -e 0.000001 -k 1
+```
+
+### 5. Alignment
